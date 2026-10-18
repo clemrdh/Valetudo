@@ -12,6 +12,7 @@ import CurrentStatistics from "./CurrentStatistics";
 import Attachments from "./Attachments";
 import DreameQuickSettings from "./DreameQuickSettings";
 import MultiFloorMapControl from "./MultiFloorMapControl";
+import RoomCleaningControl from "./RoomCleaningControl";
 import {FanSpeedMediumIcon, WaterGradeLowIcon} from "../components/CustomIcons";
 import React from "react";
 
@@ -45,6 +46,8 @@ const ControlsBody = (): React.ReactElement => {
     return (
         <Grid2 container spacing={1.5} direction="column" sx={{userSelect: "none"}}>
             {basicControls && <BasicControls />}
+
+            <RoomCleaningControl />
 
             <RobotStatus />
 

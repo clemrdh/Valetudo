@@ -1,4 +1,4 @@
-import {Capability, useCleanSegmentsMutation, useMapSegmentationPropertiesQuery, useRobotStatusQuery} from "../../../api";
+import {Capability, useMapSegmentationPropertiesQuery, useRobotStatusQuery} from "../../../api";
 import React from "react";
 import {Box, Button, CircularProgress, Container, Grid2, Typography} from "@mui/material";
 import {ActionButton} from "../../Styled";
@@ -7,8 +7,16 @@ import {useLongPress} from "use-long-press";
 import {IterationsIcon} from "../../../assets/icon_components/IterationsIcon";
 import {
     Clear as ClearIcon,
-    PlayArrow as GoIcon
+    PlayArrow as GoIcon,
+    Tune as ModeIcon
 } from "@mui/icons-material";
+import {
+    DreameCleaningMode,
+    MODE_META,
+    useCleanSegmentsCustomMutation,
+    useRoomConfigsQuery,
+    useSaveRoomConfigsMutation
+} from "../../../controls/RoomCleaningControl";
 
 interface SegmentActionsProperties {
     segments: string[];
@@ -20,10 +28,22 @@ const SegmentActions = (
     props: SegmentActionsProperties
 ): React.ReactElement => {
     const {segments, onClear} = props;
-    const [iterationCount, setIterationCount] = React.useState(1);
     const [integrationHelpDialogOpen, setIntegrationHelpDialogOpen] = React.useState(false);
     const [integrationHelpDialogPayload, setIntegrationHelpDialogPayload] = React.useState("");
 
+    const {data: roomConfigs} = useRoomConfigsQuery();
+    const {mutate: saveRoomConfigs} = useSaveRoomConfigsMutation();
+
+    const useCustomPerRoom = Boolean(roomConfigs?.useCustomPerRoom);
+    const globalConfig = roomConfigs?.globalConfig || {
+        mode: "vacuum_and_mop" as DreameCleaningMode,
+        fanSpeed: "medium" as const,
+        waterGrade: "medium" as const,
+        iterations: 1
+    };
+    const iterationCount = globalConfig.iterations || 1;
+    const activeTab: DreameCleaningMode | "custom" = useCustomPerRoom ? "custom" : globalConfig.mode;
+    const activeModeMeta = MODE_META.find(m => m.id === activeTab) || MODE_META[0];
 
     const {
         data: mapSegmentationProperties,
@@ -37,7 +57,7 @@ const SegmentActions = (
     const {
         mutate: executeSegmentAction,
         isPending: segmentActionExecuting
-    } = useCleanSegmentsMutation({
+    } = useCleanSegmentsCustomMutation({
         onSuccess: onClear,
     });
 
@@ -51,10 +71,11 @@ const SegmentActions = (
 
         executeSegmentAction({
             segment_ids: segments,
-            iterations: iterationCount,
-            customOrder: mapSegmentationProperties?.customOrderSupport
+            useCustomPerRoom: useCustomPerRoom,
+            globalConfig: globalConfig,
+            rooms: roomConfigs?.rooms
         });
-    }, [canClean, didSelectSegments, executeSegmentAction, segments, iterationCount, mapSegmentationProperties]);
+    }, [canClean, didSelectSegments, executeSegmentAction, segments, useCustomPerRoom, globalConfig, roomConfigs?.rooms]);
 
     const handleLongClick = React.useCallback(() => {
         setIntegrationHelpDialogPayload(JSON.stringify({
@@ -70,7 +91,7 @@ const SegmentActions = (
     const setupClickHandlers = useLongPress(
         handleLongClick,
         {
-            onCancel: (event) => {
+            onCancel: () => {
                 handleClick();
             },
             threshold: 500,
@@ -81,9 +102,33 @@ const SegmentActions = (
 
     const handleIterationToggle = React.useCallback(() => {
         if (mapSegmentationProperties) {
-            setIterationCount(iterationCount % mapSegmentationProperties.iterationCount.max + 1);
+            const nextIter = (iterationCount % mapSegmentationProperties.iterationCount.max) + 1;
+
+            saveRoomConfigs({
+                globalConfig: {
+                    ...globalConfig,
+                    iterations: nextIter
+                }
+            });
         }
-    }, [iterationCount, setIterationCount, mapSegmentationProperties]);
+    }, [iterationCount, mapSegmentationProperties, saveRoomConfigs, globalConfig]);
+
+    const handleModeCycle = React.useCallback(() => {
+        const idx = MODE_META.findIndex(m => m.id === activeTab);
+        const next = MODE_META[(idx + 1) % MODE_META.length];
+
+        if (next.id === "custom") {
+            saveRoomConfigs({useCustomPerRoom: true});
+        } else {
+            saveRoomConfigs({
+                useCustomPerRoom: false,
+                globalConfig: {
+                    ...globalConfig,
+                    mode: next.id
+                }
+            });
+        }
+    }, [activeTab, saveRoomConfigs, globalConfig]);
 
     if (mapSegmentationPropertiesLoadError) {
         return (
@@ -134,7 +179,7 @@ const SegmentActions = (
                         {...setupClickHandlers()}
                     >
                         <GoIcon style={{marginRight: "0.25rem", marginLeft: "-0.25rem"}}/>
-                        Clean {segments.length} segments
+                        Nettoyer ({segments.length}) · {activeModeMeta.shortLabel}
                         {segmentActionExecuting && (
                             <CircularProgress
                                 color="inherit"
@@ -144,8 +189,23 @@ const SegmentActions = (
                         )}
                     </ActionButton>
                 </Grid2>
+                <Grid2>
+                    <ActionButton
+                        color="inherit"
+                        size="medium"
+                        variant="extended"
+                        style={{
+                            textTransform: "initial"
+                        }}
+                        onClick={handleModeCycle}
+                        title="Changer le mode (Vac+Mop / Vac→Mop / Vac / Mop / Custom)"
+                    >
+                        <ModeIcon style={{marginRight: "0.25rem", fontSize: "1.1rem"}}/>
+                        {activeModeMeta.shortLabel}
+                    </ActionButton>
+                </Grid2>
                 {
-                    mapSegmentationProperties.iterationCount.max > 1 &&
+                    !useCustomPerRoom && mapSegmentationProperties.iterationCount.max > 1 &&
                     <Grid2>
                         <ActionButton
                             color="inherit"
@@ -155,7 +215,7 @@ const SegmentActions = (
                                 textTransform: "initial"
                             }}
                             onClick={handleIterationToggle}
-                            title="Iteration Count"
+                            title="Nombre de passages"
                         >
                             <IterationsIcon iterationCount={iterationCount}/>
                         </ActionButton>
@@ -171,7 +231,7 @@ const SegmentActions = (
                             onClick={onClear}
                         >
                             <ClearIcon style={{marginRight: "0.25rem", marginLeft: "-0.25rem"}}/>
-                            Clear
+                            Aucune
                         </ActionButton>
                     </Grid2>
                 }
@@ -179,7 +239,7 @@ const SegmentActions = (
                     (didSelectSegments && !canClean) &&
                     <Grid2>
                         <Typography variant="caption" color="textSecondary">
-                            Cannot start segment cleaning while the robot is busy
+                            Robot en cours d&apos;activité
                         </Typography>
                     </Grid2>
                 }

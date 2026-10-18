@@ -215,6 +215,39 @@ class DreameMapParser {
                 }
             }
 
+            try {
+                const activeFloor = fs.existsSync("/data/maps_backup/current_floor.txt") ?
+                    fs.readFileSync("/data/maps_backup/current_floor.txt", "utf8").trim() :
+                    "default";
+                let allCustom = {};
+                if (fs.existsSync("/data/maps_backup/custom_segments.json")) {
+                    allCustom = JSON.parse(fs.readFileSync("/data/maps_backup/custom_segments.json", "utf8"));
+                }
+                if (!allCustom[activeFloor]) {
+                    allCustom[activeFloor] = {splits: [], joins: [], names: {}};
+                }
+                if (!allCustom[activeFloor].names) {
+                    allCustom[activeFloor].names = {};
+                }
+                let updatedCustom = false;
+                layers.forEach(l => {
+                    if (l.metaData?.segmentId !== undefined) {
+                        const sId = String(l.metaData.segmentId);
+                        if (allCustom[activeFloor].names[sId]) {
+                            l.metaData.name = allCustom[activeFloor].names[sId];
+                        } else if (l.metaData.name) {
+                            allCustom[activeFloor].names[sId] = l.metaData.name;
+                            updatedCustom = true;
+                        }
+                    }
+                });
+                if (updatedCustom) {
+                    fs.writeFileSync("/data/maps_backup/custom_segments.json", JSON.stringify(allCustom, null, 2), "utf8");
+                }
+            } catch (e) {
+                // ignore custom_segments sync errors
+            }
+
 
             if (additionalData.tr) {
                 const paths = DreameMapParser.PARSE_PATH(parsedHeader, additionalData.tr, additionalData.l2r === 1);

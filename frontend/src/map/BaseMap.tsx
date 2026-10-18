@@ -41,6 +41,26 @@ export const usePendingMapAction = create<{
     };
 });
 
+export const useSegmentSelectionStore = create<{
+    selectedSegmentIds: Array<string>;
+    toggleSegment: (id: string) => void;
+    setSelectedSegments: (ids: Array<string>) => void;
+    clearSelectedSegments: () => void;
+}>()(() => {
+    return {
+        selectedSegmentIds: [],
+        toggleSegment: () => {
+            /* bound by LiveMap */
+        },
+        setSelectedSegments: () => {
+            /* bound by LiveMap */
+        },
+        clearSelectedSegments: () => {
+            /* bound by LiveMap */
+        }
+    };
+});
+
 export const MapContainer = styled(Box)({
     position: "relative",
     height: "100%",
@@ -339,6 +359,7 @@ abstract class BaseMap<P, S> extends React.Component<P & MapProps, S & MapState 
         }
 
         this.mapLayerManager.setSelectedSegmentIds(updatedSelectedSegmentIds);
+        useSegmentSelectionStore.setState({selectedSegmentIds: updatedSelectedSegmentIds});
 
         this.setState({
             selectedSegmentIds: updatedSelectedSegmentIds,

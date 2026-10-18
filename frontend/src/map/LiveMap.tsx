@@ -1,4 +1,4 @@
-import BaseMap, {MapContainer, MapProps, MapState, usePendingMapAction} from "./BaseMap";
+import BaseMap, {MapContainer, MapProps, MapState, usePendingMapAction, useSegmentSelectionStore} from "./BaseMap";
 import {Capability} from "../api";
 import GoToTargetClientStructure from "./structures/client_structures/GoToTargetClientStructure";
 import {ActionsContainer} from "./Styled";
@@ -75,6 +75,71 @@ class LiveMap extends BaseMap<LiveMapProps, LiveMapState> {
         };
     }
 
+    componentDidMount(): void {
+        super.componentDidMount();
+
+        useSegmentSelectionStore.setState({
+            toggleSegment: (id: string) => {
+                const segmentLabels = this.structureManager.getMapStructures().filter(s => {
+                    return s.type === SegmentLabelMapStructure.TYPE;
+                }) as Array<SegmentLabelMapStructure>;
+
+                const matched = segmentLabels.find(l => {
+                    return String(l.id) === String(id);
+                });
+
+                if (matched) {
+                    if (this.state.mode !== "segments" && this.supportedModes.includes("segments")) {
+                        this.setState({mode: "segments"});
+                        try {
+                            window.localStorage.setItem(LIVE_MAP_MODE_LOCAL_STORAGE_KEY, "segments");
+                        } catch (e) {
+                            /* ignore */
+                        }
+                    }
+                    matched.onTap();
+                    this.updateState();
+                    this.redrawLayers();
+                }
+            },
+            setSelectedSegments: (ids: Array<string>) => {
+                const strIds = ids.map(i => String(i));
+                const segmentLabels = this.structureManager.getMapStructures().filter(s => {
+                    return s.type === SegmentLabelMapStructure.TYPE;
+                }) as Array<SegmentLabelMapStructure>;
+
+                segmentLabels.forEach(l => {
+                    l.selected = strIds.includes(String(l.id));
+                });
+
+                if (strIds.length > 0 && this.state.mode !== "segments" && this.supportedModes.includes("segments")) {
+                    this.setState({mode: "segments"});
+                    try {
+                        window.localStorage.setItem(LIVE_MAP_MODE_LOCAL_STORAGE_KEY, "segments");
+                    } catch (e) {
+                        /* ignore */
+                    }
+                }
+
+                this.setState({selectedSegmentIds: strIds}, () => {
+                    this.updateState();
+                    this.redrawLayers();
+                });
+            },
+            clearSelectedSegments: () => {
+                this.structureManager.getMapStructures().forEach(s => {
+                    if (s.type === SegmentLabelMapStructure.TYPE) {
+                        const label = s as SegmentLabelMapStructure;
+
+                        label.selected = false;
+                    }
+                });
+                this.updateState();
+                this.redrawLayers();
+            }
+        });
+    }
+
     protected updateState() : void {
         super.updateState();
 
@@ -98,7 +163,12 @@ class LiveMap extends BaseMap<LiveMapProps, LiveMapState> {
         const tappedPointInMapSpace = this.ctxWrapper.mapPointToCurrentTransform(x, y);
 
         switch (this.state.mode) {
-            case "segments": {
+            case "segments":
+            case "maps":
+            case "none": {
+                if (!this.supportedModes.includes("segments")) {
+                    break;
+                }
                 const intersectingSegmentId = this.mapLayerManager.getIntersectingSegment(tappedPointInMapSpace.x, tappedPointInMapSpace.y);
 
                 if (intersectingSegmentId) {
@@ -112,6 +182,14 @@ class LiveMap extends BaseMap<LiveMapProps, LiveMapState> {
 
 
                     if (matchedSegmentLabel) {
+                        if (this.state.mode !== "segments") {
+                            this.setState({mode: "segments"});
+                            try {
+                                window.localStorage.setItem(LIVE_MAP_MODE_LOCAL_STORAGE_KEY, "segments");
+                            } catch (e) {
+                                /* ignore */
+                            }
+                        }
                         matchedSegmentLabel.onTap();
 
                         this.updateState();

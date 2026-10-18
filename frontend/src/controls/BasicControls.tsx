@@ -23,7 +23,8 @@ import {
 } from "@mui/icons-material";
 import React from "react";
 import ConfirmationDialog from "../components/ConfirmationDialog";
-import {usePendingMapAction} from "../map/BaseMap";
+import {usePendingMapAction, useSegmentSelectionStore} from "../map/BaseMap";
+import {useCleanSegmentsCustomMutation, useRoomConfigsQuery} from "./RoomCleaningControl";
 
 const StartStates: StatusState["value"][] = ["idle", "docked", "paused", "error"];
 const PauseStates: StatusState["value"][] = ["cleaning", "returning", "moving"];
@@ -43,18 +44,41 @@ const BasicControls = (): React.ReactElement => {
         isPending: basicControlIsExecuting
     } = useBasicControlMutation();
 
+    const selectedSegmentIds = useSegmentSelectionStore(s => s.selectedSegmentIds);
+    const clearSelectedSegments = useSegmentSelectionStore(s => s.clearSelectedSegments);
+    const {data: roomConfigs} = useRoomConfigsQuery();
+    const {
+        mutate: startCustomClean,
+        isPending: customCleanIsExecuting
+    } = useCleanSegmentsCustomMutation({
+        onSuccess: () => {
+            clearSelectedSegments();
+        }
+    });
+
     const {
         hasPendingMapAction: hasPendingMapAction
     } = usePendingMapAction();
 
-    const isPending = basicControlIsExecuting;
+    const isPending = basicControlIsExecuting || customCleanIsExecuting;
 
     const sendCommand = (command: BasicControlCommand) => {
-        if (command === "start" && hasPendingMapAction) {
-            setStartConfirmationDialogOpen(true);
-        } else {
-            executeBasicControlCommand(command);
+        if (command === "start" && status?.flag !== "resumable") {
+            if (selectedSegmentIds.length > 0) {
+                startCustomClean({
+                    segment_ids: selectedSegmentIds,
+                    useCustomPerRoom: roomConfigs?.useCustomPerRoom,
+                    globalConfig: roomConfigs?.globalConfig,
+                    rooms: roomConfigs?.rooms
+                });
+                return;
+            }
+            if (hasPendingMapAction) {
+                setStartConfirmationDialogOpen(true);
+                return;
+            }
         }
+        executeBasicControlCommand(command);
     };
 
     if (statusPending) {

@@ -46,9 +46,25 @@ class DreameMapSegmentationCapability extends MapSegmentationCapability {
      * @param {object} [options]
      * @param {number} [options.iterations]
      * @param {boolean} [options.customOrder]
+     * @param {string} [options.fanSpeed]
+     * @param {string} [options.waterGrade]
+     * @param {Object.<string, {iterations?: number, fanSpeed?: string, waterGrade?: string, operationMode?: string}>} [options.perSegmentConfigs]
      * @returns {Promise<void>}
      */
     async executeSegmentAction(segments, options) {
+        const FAN_SPEED_MAP = {
+            low: 0,
+            medium: 1,
+            high: 2,
+            max: 3,
+            turbo: 3
+        };
+        const WATER_GRADE_MAP = {
+            low: 1,
+            medium: 2,
+            high: 3
+        };
+
         const FanSpeedStateAttribute = this.robot.state.getFirstMatchingAttribute({
             attributeClass: entities.state.attributes.PresetSelectionStateAttribute.name,
             attributeType: entities.state.attributes.PresetSelectionStateAttribute.TYPE.FAN_SPEED
@@ -58,8 +74,37 @@ class DreameMapSegmentationCapability extends MapSegmentationCapability {
             attributeType: entities.state.attributes.PresetSelectionStateAttribute.TYPE.WATER_GRADE
         });
 
-        let fanSpeed = FanSpeedStateAttribute?.metaData?.rawValue ?? 1;
-        let waterGrade = WaterGradeAttribute?.metaData?.rawValue ?? 1;
+        let defaultFanSpeed = FanSpeedStateAttribute?.metaData?.rawValue ?? 1;
+        let defaultWaterGrade = WaterGradeAttribute?.metaData?.rawValue ?? 2;
+
+        if (options?.fanSpeed && FAN_SPEED_MAP[options.fanSpeed] !== undefined) {
+            defaultFanSpeed = FAN_SPEED_MAP[options.fanSpeed];
+        }
+        if (options?.waterGrade && WATER_GRADE_MAP[options.waterGrade] !== undefined) {
+            defaultWaterGrade = WATER_GRADE_MAP[options.waterGrade];
+        }
+
+        const defaultIterations = typeof options?.iterations === "number" ? options.iterations : 1;
+        const perSegmentConfigs = options?.perSegmentConfigs || {};
+
+        const resolveSegParams = (segId) => {
+            const cfg = perSegmentConfigs[String(segId)] || {};
+            const segIter = typeof cfg.iterations === "number" && cfg.iterations >= 1 && cfg.iterations <= 3 ?
+                cfg.iterations :
+                defaultIterations;
+            const segFan = cfg.fanSpeed && FAN_SPEED_MAP[cfg.fanSpeed] !== undefined ?
+                FAN_SPEED_MAP[cfg.fanSpeed] :
+                defaultFanSpeed;
+            const segWater = cfg.waterGrade && WATER_GRADE_MAP[cfg.waterGrade] !== undefined ?
+                WATER_GRADE_MAP[cfg.waterGrade] :
+                defaultWaterGrade;
+
+            return {
+                iterations: segIter,
+                fanSpeed: segFan,
+                waterGrade: segWater
+            };
+        };
 
         const mapLayers = this.robot?.state?.map?.layers ?? [];
         const pixelSize = this.robot?.state?.map?.pixelSize ?? 5;
@@ -69,7 +114,6 @@ class DreameMapSegmentationCapability extends MapSegmentationCapability {
 
         if (isAutoSegmented) {
             const zones = [];
-            const iterations = typeof options?.iterations === "number" ? options.iterations : 1;
 
             segments.forEach(seg => {
                 const layer = mapLayers.find(l => {
@@ -77,6 +121,7 @@ class DreameMapSegmentationCapability extends MapSegmentationCapability {
                 });
 
                 if (layer && layer.dimensions) {
+                    const params = resolveSegParams(seg.id);
                     const xMin = layer.dimensions.x.min * pixelSize;
                     const xMax = (layer.dimensions.x.max + 1) * pixelSize;
                     const yMin = layer.dimensions.y.min * pixelSize;
@@ -89,9 +134,9 @@ class DreameMapSegmentationCapability extends MapSegmentationCapability {
                         Math.min(pA.y, pC.y),
                         Math.max(pA.x, pC.x),
                         Math.max(pA.y, pC.y),
-                        iterations,
-                        fanSpeed,
-                        waterGrade
+                        params.iterations,
+                        params.fanSpeed,
+                        params.waterGrade
                     ]);
                 }
             });
@@ -116,11 +161,13 @@ class DreameMapSegmentationCapability extends MapSegmentationCapability {
         }
 
         const mappedSegments = segments.map((segment, i) => {
+            const params = resolveSegParams(segment.id);
+
             return [
                 parseInt(segment.id),
-                typeof options?.iterations === "number" ? options.iterations : 1,
-                fanSpeed,
-                waterGrade,
+                params.iterations,
+                params.fanSpeed,
+                params.waterGrade,
                 this.newOrder ? 1 : i + 1 // on older robots, this determines the order in which the segments should be cleaned
             ];
         });

@@ -64,15 +64,16 @@ class DreameMapSegmentRenameCapability extends MapSegmentRenameCapability {
             return l.type === "segment" && l.metaData?.autoSegmented === true;
         });
 
-        if (isAutoSegmented) {
-            mapLayers.forEach(l => {
-                if (l.type === "segment" && String(l.metaData?.segmentId) === String(segment.id)) {
-                    l.metaData.name = name;
-                }
-            });
-            if (typeof this.robot.emitMapUpdated === "function") {
-                this.robot.emitMapUpdated();
+        mapLayers.forEach(l => {
+            if (l.type === "segment" && String(l.metaData?.segmentId) === String(segment.id)) {
+                l.metaData.name = name;
             }
+        });
+        if (typeof this.robot.emitMapUpdated === "function") {
+            this.robot.emitMapUpdated();
+        }
+
+        if (isAutoSegmented) {
             return;
         }
 
@@ -107,6 +108,18 @@ class DreameMapSegmentRenameCapability extends MapSegmentRenameCapability {
             switch (res.out[0].value) {
                 case 0:
                     this.robot.pollMap();
+                    setTimeout(() => {
+                        try {
+                            const activeFloor = fs.existsSync(CURRENT_FLOOR_FILE) ?
+                                fs.readFileSync(CURRENT_FLOOR_FILE, "utf8").trim() :
+                                "";
+                            if (activeFloor && activeFloor !== "nouvelle_carte_vierge") {
+                                require("child_process").execFile("/data/map_manager.sh", ["save", activeFloor], {timeout: 15000}, () => {});
+                            }
+                        } catch (e) {
+                            // ignore
+                        }
+                    }, 2500);
                     return;
                 default:
                     throw new RobotFirmwareError("Got error " + res.out[0].value + " while naming segment.");

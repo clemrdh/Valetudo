@@ -85,6 +85,9 @@ export const useMultiFloorMapActionMutation = () => {
                 queryClient.invalidateQueries({queryKey: ["segments"]}).catch(() => {
                     /* intentional */
                 });
+                queryClient.invalidateQueries({queryKey: ["room_clean_configs"]}).catch(() => {
+                    /* intentional */
+                });
             };
 
             refreshMapQueries();
