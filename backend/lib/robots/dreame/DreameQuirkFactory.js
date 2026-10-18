@@ -584,18 +584,23 @@ class DreameQuirkFactory {
                                 throw new Error(`Received invalid value ${value}`);
                         }
 
-                        return this.robot.miotHelper.writeProperty(
+                        await this.robot.miotHelper.writeProperty(
                             DreameMiotServices["GEN2"].VACUUM_2.SIID,
                             DreameMiotServices["GEN2"].VACUUM_2.PROPERTIES.MISC_TUNABLES.PIID,
-                            val === 1 ?
-                                DreameUtils.SERIALIZE_MISC_TUNABLES([
-                                    {k: "SbrushExtrSwitch", v: 1},
-                                    {k: "ExtrFreq", v: 2}
-                                ]) :
-                                DreameUtils.SERIALIZE_MISC_TUNABLES_SINGLE_TUNABLE({
-                                    SbrushExtrSwitch: val
-                                })
+                            DreameUtils.SERIALIZE_MISC_TUNABLES_SINGLE_TUNABLE({
+                                SbrushExtrSwitch: val
+                            })
                         );
+
+                        if (val === 1) {
+                            await this.robot.miotHelper.writeProperty(
+                                DreameMiotServices["GEN2"].VACUUM_2.SIID,
+                                DreameMiotServices["GEN2"].VACUUM_2.PROPERTIES.MISC_TUNABLES.PIID,
+                                DreameUtils.SERIALIZE_MISC_TUNABLES_SINGLE_TUNABLE({
+                                    ExtrFreq: 2
+                                })
+                            );
+                        }
                     }
                 });
             case DreameQuirkFactory.KNOWN_QUIRKS.DETACH_MOPS:
