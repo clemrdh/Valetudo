@@ -7,13 +7,14 @@ import SegmentLabelMapStructure from "./structures/map_structures/SegmentLabelMa
 import ZoneActions from "./actions/live_map_actions/ZoneActions";
 import ZoneClientStructure from "./structures/client_structures/ZoneClientStructure";
 import GoToActions from "./actions/live_map_actions/GoToActions";
+import MapChangeActions from "./actions/live_map_actions/MapChangeActions";
 import {TapTouchHandlerEvent} from "./utils/touch_handling/events/TapTouchHandlerEvent";
 import React from "react";
 import {LiveMapModeSwitcher} from "./LiveMapModeSwitcher";
 import {Button, Dialog, DialogActions, DialogContent, DialogTitle} from "@mui/material";
 
 
-export type LiveMapMode = "segments" | "zones" | "goto" | "none";
+export type LiveMapMode = "segments" | "zones" | "goto" | "maps" | "none";
 const LIVE_MAP_MODE_LOCAL_STORAGE_KEY = "live-map-mode";
 
 interface LiveMapProps extends MapProps {
@@ -47,6 +48,7 @@ class LiveMap extends BaseMap<LiveMapProps, LiveMapState> {
         if (props.supportedCapabilities[Capability.GoToLocation]) {
             this.supportedModes.push("goto");
         }
+        this.supportedModes.push("maps");
 
         let modeIdxToUse = 0;
         try {
@@ -295,6 +297,11 @@ class LiveMap extends BaseMap<LiveMapProps, LiveMapState> {
                                 this.draw();
                             }}
                         />
+                    }
+                    {
+                        this.state.mode === "maps" &&
+
+                        <MapChangeActions/>
                     }
                 </ActionsContainer>
                 <Dialog

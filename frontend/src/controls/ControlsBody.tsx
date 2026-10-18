@@ -10,6 +10,7 @@ import RobotStatus from "./RobotStatus";
 import Dock from "./Dock";
 import CurrentStatistics from "./CurrentStatistics";
 import Attachments from "./Attachments";
+import MultiFloorMapControl from "./MultiFloorMapControl";
 import {FanSpeedMediumIcon, WaterGradeLowIcon} from "../components/CustomIcons";
 import React from "react";
 
@@ -45,6 +46,8 @@ const ControlsBody = (): React.ReactElement => {
             {basicControls && <BasicControls />}
 
             <RobotStatus />
+
+            <MultiFloorMapControl />
 
             {operationMode && (
                 <PresetSelectionControl

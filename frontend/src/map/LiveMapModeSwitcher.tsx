@@ -2,6 +2,7 @@ import {Box, emphasize, SpeedDial, SpeedDialAction, styled} from "@mui/material"
 import {
     CropSquare as ZoneModeIcon,
     Dashboard as SegmentModeIcon,
+    Layers as MapsModeIcon,
     Room as GoToModeIcon,
     QuestionMark as NoneModeIcon,
 } from "@mui/icons-material";
@@ -48,6 +49,7 @@ const modeToIcon: Record<LiveMapMode, React.ReactElement> = {
     "segments": <SegmentModeIcon/>,
     "zones": <ZoneModeIcon/>,
     "goto": <GoToModeIcon/>,
+    "maps": <MapsModeIcon/>,
     "none": <NoneModeIcon/>
 };
 
@@ -55,6 +57,7 @@ const modeToLabel: Record<LiveMapMode, string> = {
     "segments": "Segments",
     "zones": "Zones",
     "goto": "Go To",
+    "maps": "Change Map",
     "none": "None"
 };
 

@@ -30,6 +30,8 @@ import {MapManagementHelp} from "./res/MapManagementHelp";
 import PaperContainer from "../components/PaperContainer";
 import {MapUtilitiesHelp} from "./res/MapUtilitiesHelp";
 import {VirtualRestrictionsIcon} from "../components/CustomIcons";
+import MultiFloorMapControl from "../controls/MultiFloorMapControl";
+import {Box} from "@mui/material";
 
 
 export const MappingPassButtonItem = (): React.ReactElement => {
@@ -305,6 +307,9 @@ const MapManagement = (): React.ReactElement => {
 
     return (
         <PaperContainer>
+            <Box sx={{mb: 2}}>
+                <MultiFloorMapControl />
+            </Box>
             <ListMenu
                 primaryHeader={"Robot-managed Map Features"}
                 secondaryHeader={"These features are managed and provided by the robot's firmware"}
