@@ -138,14 +138,22 @@ abstract class BaseMap<P, S> extends React.Component<P & MapProps, S & MapState 
         window.addEventListener("resize", this.resizeListener);
         document.addEventListener("visibilitychange", this.visibilityStateChangeListener);
 
+        this.recenterCanvasOnMap();
+
+        this.updateInternalDrawableState();
+
+        usePendingMapAction.setState({hasPendingMapAction: false});
+    }
+
+    protected getLayersBoundingBox(rawMap: RawMapData): { minX: number; minY: number; maxX: number; maxY: number } {
         const boundingBox = {
-            minX: this.props.rawMap.size.x / this.props.rawMap.pixelSize,
-            minY: this.props.rawMap.size.y / this.props.rawMap.pixelSize,
+            minX: rawMap.size.x / rawMap.pixelSize,
+            minY: rawMap.size.y / rawMap.pixelSize,
             maxX: 0,
             maxY: 0
         };
 
-        this.props.rawMap.layers.forEach(l => {
+        rawMap.layers.forEach(l => {
             if (l.dimensions.x.min < boundingBox.minX) {
                 boundingBox.minX = l.dimensions.x.min;
             }
@@ -160,30 +168,62 @@ abstract class BaseMap<P, S> extends React.Component<P & MapProps, S & MapState 
             }
         });
 
+        return boundingBox;
+    }
+
+    protected recenterCanvasOnMap(): void {
+        this.ctxWrapper.setTransform(1, 0, 0, 1, 0, 0);
+
+        if (this.props.rawMap.layers.length === 0) {
+            this.currentScaleFactor = 1;
+            return;
+        }
+
+        const boundingBox = this.getLayersBoundingBox(this.props.rawMap);
+
+        const boxWidth = boundingBox.maxX - boundingBox.minX;
+        const boxHeight = boundingBox.maxY - boundingBox.minY;
+
+        if (boxWidth <= 0 || boxHeight <= 0) {
+            this.currentScaleFactor = 1;
+            return;
+        }
 
         const initialScalingFactor = Math.min(
-            this.canvas.width / ((boundingBox.maxX - boundingBox.minX)*1.1),
-            this.canvas.height / ((boundingBox.maxY - boundingBox.minY)*1.1)
+            this.canvas.width / (boxWidth * 1.1),
+            this.canvas.height / (boxHeight * 1.1)
         );
 
-        const initialxOffset = (this.canvas.width - (boundingBox.maxX - boundingBox.minX)*initialScalingFactor) / 2;
-        const initialyOffset = (this.canvas.height - (boundingBox.maxY - boundingBox.minY)*initialScalingFactor) / 2;
+        const initialxOffset = (this.canvas.width - boxWidth * initialScalingFactor) / 2;
+        const initialyOffset = (this.canvas.height - boxHeight * initialScalingFactor) / 2;
         this.ctxWrapper.translate(initialxOffset, initialyOffset);
-
 
         this.currentScaleFactor = initialScalingFactor;
 
         this.ctxWrapper.scale(initialScalingFactor, initialScalingFactor);
         this.ctxWrapper.translate(-boundingBox.minX, -boundingBox.minY);
-
-
-        this.updateInternalDrawableState();
-
-        usePendingMapAction.setState({hasPendingMapAction: false});
     }
 
     componentDidUpdate(prevProps: Readonly<MapProps>, prevState: Readonly<MapState>): void {
         if (prevProps.rawMap.metaData.nonce !== this.props.rawMap.metaData.nonce) {
+            const prevBox = this.getLayersBoundingBox(prevProps.rawMap);
+            const nextBox = this.getLayersBoundingBox(this.props.rawMap);
+            const boundsShifted =
+                Math.abs(prevBox.minX - nextBox.minX) > 25 ||
+                Math.abs(prevBox.minY - nextBox.minY) > 25 ||
+                Math.abs(prevBox.maxX - nextBox.maxX) > 25 ||
+                Math.abs(prevBox.maxY - nextBox.maxY) > 25;
+
+            if (
+                prevProps.rawMap.size.x !== this.props.rawMap.size.x ||
+                prevProps.rawMap.size.y !== this.props.rawMap.size.y ||
+                prevProps.rawMap.layers.length === 0 ||
+                this.props.rawMap.layers.length === 0 ||
+                boundsShifted
+            ) {
+                this.recenterCanvasOnMap();
+            }
+
             this.onMapUpdate();
 
             /**

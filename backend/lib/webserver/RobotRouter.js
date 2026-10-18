@@ -145,6 +145,32 @@ class RobotRouter {
         });
     }
 
+    async loadImmediateMapPreview() {
+        try {
+            const dat2Path = "/data/ri/1.dat2";
+            if (fs.existsSync(dat2Path) && typeof this.robot.preprocessAndParseMap === "function") {
+                const dat2 = JSON.parse(fs.readFileSync(dat2Path, "utf8"));
+                if (dat2 && dat2.last_app_map) {
+                    await this.robot.preprocessAndParseMap(dat2.last_app_map);
+                }
+            }
+        } catch (e) {
+            Logger.warn("Unable to load immediate map preview from /data/ri/1.dat2", e);
+        }
+    }
+
+    scheduleMapPolls() {
+        [5000, 10000, 16000, 22000].forEach(delay => {
+            setTimeout(() => {
+                try {
+                    this.robot.pollMap();
+                } catch (e) {
+                    // ignore
+                }
+            }, delay);
+        });
+    }
+
 
     initRoutes() {
         this.router.get("/", (req, res) => {
@@ -220,9 +246,8 @@ class RobotRouter {
                         await this.execMapManager(["load", id]);
                         meta.activeMapId = id;
                         this.writeMapsMeta(meta);
-                        setTimeout(() => {
-                            this.robot.pollMap();
-                        }, 3500);
+                        await this.loadImmediateMapPreview();
+                        this.scheduleMapPolls();
                         res.json(this.readMapsMeta());
                         break;
                     }
@@ -312,9 +337,10 @@ class RobotRouter {
                         meta.activeMapId = newId;
                         this.writeMapsMeta(meta);
 
-                        setTimeout(() => {
-                            this.robot.pollMap();
-                        }, 3500);
+                        if (typeof this.robot.clearValetudoMap === "function") {
+                            this.robot.clearValetudoMap();
+                        }
+                        this.scheduleMapPolls();
 
                         if (action === "mapping_pass") {
                             setTimeout(async () => {
@@ -334,7 +360,7 @@ class RobotRouter {
                                         Logger.error("Fallback start failed", e2);
                                     }
                                 }
-                            }, 7500);
+                            }, 16000);
                         }
 
                         res.json(this.readMapsMeta());
@@ -347,9 +373,10 @@ class RobotRouter {
                         }
                         await this.execMapManager(["load", "nouvelle_carte_vierge"]);
                         this.writeMapsMeta(meta);
-                        setTimeout(() => {
-                            this.robot.pollMap();
-                        }, 3500);
+                        if (typeof this.robot.clearValetudoMap === "function") {
+                            this.robot.clearValetudoMap();
+                        }
+                        this.scheduleMapPolls();
                         res.json(this.readMapsMeta());
                         break;
                     }

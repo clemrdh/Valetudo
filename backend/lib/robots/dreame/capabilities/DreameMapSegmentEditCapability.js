@@ -1,6 +1,10 @@
 const DreameMapParser = require("../DreameMapParser");
+const fs = require("fs");
 const MapSegmentEditCapability = require("../../../core/capabilities/MapSegmentEditCapability");
 const RobotFirmwareError = require("../../../core/RobotFirmwareError");
+
+const CUSTOM_SEGMENTS_FILE = "/data/maps_backup/custom_segments.json";
+const CURRENT_FLOOR_FILE = "/data/maps_backup/current_floor.txt";
 
 /**
  * @extends MapSegmentEditCapability<import("../DreameValetudoRobot")>
@@ -31,11 +35,62 @@ class DreameMapSegmentEditCapability extends MapSegmentEditCapability {
     }
 
     /**
+     * @private
+     */
+    readCustomSegments() {
+        const activeFloor = fs.existsSync(CURRENT_FLOOR_FILE) ?
+            fs.readFileSync(CURRENT_FLOOR_FILE, "utf8").trim() :
+            "default";
+        let all = {};
+        try {
+            if (fs.existsSync(CUSTOM_SEGMENTS_FILE)) {
+                all = JSON.parse(fs.readFileSync(CUSTOM_SEGMENTS_FILE, "utf8"));
+            }
+        } catch (e) {
+            all = {};
+        }
+        if (!all[activeFloor]) {
+            all[activeFloor] = {splits: [], joins: [], names: {}};
+        }
+        return {activeFloor, all, cfg: all[activeFloor]};
+    }
+
+    /**
+     * @private
+     */
+    async refreshFromDat2() {
+        try {
+            if (fs.existsSync("/data/ri/1.dat2") && typeof this.robot.preprocessAndParseMap === "function") {
+                const dat2 = JSON.parse(fs.readFileSync("/data/ri/1.dat2", "utf8"));
+                if (dat2.last_app_map) {
+                    await this.robot.preprocessAndParseMap(dat2.last_app_map);
+                }
+            }
+        } catch (e) {
+            // ignore
+        }
+        this.robot.pollMap();
+    }
+
+    /**
      * @param {import("../../../entities/core/ValetudoMapSegment")} segmentA
      * @param {import("../../../entities/core/ValetudoMapSegment")} segmentB
      * @returns {Promise<void>}
      */
     async joinSegments(segmentA, segmentB) {
+        const isAutoSegmented = (this.robot?.state?.map?.layers ?? []).some(l => {
+            return l.type === "segment" && l.metaData?.autoSegmented === true;
+        });
+
+        if (isAutoSegmented) {
+            const {all, cfg} = this.readCustomSegments();
+            cfg.joins = Array.isArray(cfg.joins) ? cfg.joins : [];
+            cfg.joins.push([String(segmentA.id), String(segmentB.id)]);
+            fs.writeFileSync(CUSTOM_SEGMENTS_FILE, JSON.stringify(all, null, 2), "utf8");
+            await this.refreshFromDat2();
+            return;
+        }
+
         const res = await this.robot.sendCommand("action",
             {
                 did: this.robot.deviceId,
@@ -82,6 +137,42 @@ class DreameMapSegmentEditCapability extends MapSegmentEditCapability {
      * @returns {Promise<void>}
      */
     async splitSegment(segment, pA, pB) {
+        const mapLayers = this.robot?.state?.map?.layers ?? [];
+        const isAutoSegmented = mapLayers.some(l => {
+            return l.type === "segment" && l.metaData?.autoSegmented === true;
+        });
+
+        if (isAutoSegmented) {
+            const pixelSize = this.robot?.state?.map?.pixelSize ?? 5;
+            let maxId = 5;
+            mapLayers.forEach(l => {
+                const n = parseInt(l.metaData?.segmentId, 10);
+                if (!isNaN(n) && n > maxId) {
+                    maxId = n;
+                }
+            });
+            const {all, cfg} = this.readCustomSegments();
+            cfg.splits = Array.isArray(cfg.splits) ? cfg.splits : [];
+            cfg.splits.forEach(sp => {
+                const n = parseInt(sp.newId, 10);
+                if (!isNaN(n) && n > maxId) {
+                    maxId = n;
+                }
+            });
+            const newId = String(maxId + 1);
+            cfg.splits.push({
+                targetId: String(segment.id),
+                newId: newId,
+                x1: pA.x / pixelSize,
+                y1: pA.y / pixelSize,
+                x2: pB.x / pixelSize,
+                y2: pB.y / pixelSize
+            });
+            fs.writeFileSync(CUSTOM_SEGMENTS_FILE, JSON.stringify(all, null, 2), "utf8");
+            await this.refreshFromDat2();
+            return;
+        }
+
         pA = DreameMapParser.CONVERT_TO_DREAME_COORDINATES(pA.x, pA.y);
         pB = DreameMapParser.CONVERT_TO_DREAME_COORDINATES(pB.x, pB.y);
 

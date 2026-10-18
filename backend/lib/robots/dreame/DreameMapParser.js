@@ -1,4 +1,5 @@
 const DreameConst = require("./DreameConst");
+const fs = require("fs");
 const Logger = require("../../Logger");
 const mapEntities = require("../../entities/map");
 const uuid = require("uuid");
@@ -586,6 +587,103 @@ class DreameMapParser {
             }
         }
 
+        let wasAutoSegmented = false;
+        let customFloorCfg = null;
+        let hasNativeDivideMap = true;
+        try {
+            hasNativeDivideMap = fs.existsSync("/data/DivideMap/1/segmented_map_large.png");
+            const activeFloor = fs.existsSync("/data/maps_backup/current_floor.txt") ?
+                fs.readFileSync("/data/maps_backup/current_floor.txt", "utf8").trim() :
+                "default";
+            if (fs.existsSync("/data/maps_backup/custom_segments.json")) {
+                const allCustom = JSON.parse(fs.readFileSync("/data/maps_backup/custom_segments.json", "utf8"));
+                customFloorCfg = allCustom[activeFloor] ?? null;
+            }
+        } catch (e) {
+            // ignore custom segment config read errors
+        }
+
+        if (mapType === MAP_DATA_TYPES.REGULAR && !hasNativeDivideMap && Object.keys(segments).length > 0) {
+            for (const sId of Object.keys(segments)) {
+                floorPixels.push(...segments[sId]);
+                delete segments[sId];
+            }
+        }
+
+        if (mapType === MAP_DATA_TYPES.REGULAR && Object.keys(segments).length === 0 && floorPixels.length > 200) {
+            wasAutoSegmented = true;
+            let minX = Infinity;
+            let maxX = -Infinity;
+            let minY = Infinity;
+            let maxY = -Infinity;
+
+            for (let k = 0; k < floorPixels.length; k++) {
+                const [x, y] = floorPixels[k];
+                if (x < minX) {
+                    minX = x;
+                }
+                if (x > maxX) {
+                    maxX = x;
+                }
+                if (y < minY) {
+                    minY = y;
+                }
+                if (y > maxY) {
+                    maxY = y;
+                }
+            }
+
+            const spanX = Math.max(1, maxX - minX);
+            const spanY = Math.max(1, maxY - minY);
+            const splits = Array.isArray(customFloorCfg?.splits) ? customFloorCfg.splits : [];
+            const joins = Array.isArray(customFloorCfg?.joins) ? customFloorCfg.joins : [];
+
+            for (let k = 0; k < floorPixels.length; k++) {
+                const coords = floorPixels[k];
+                const nx = (coords[0] - minX) / spanX;
+                const ny = (coords[1] - minY) / spanY;
+                let segId = "1";
+
+                if (!customFloorCfg?.resetToSingle) {
+                    if (ny < 0.38) {
+                        segId = "5";
+                    } else if (nx >= 0.40 && ny < 0.85) {
+                        segId = "4";
+                    } else if (ny < 0.55) {
+                        segId = "3";
+                    } else if (ny < 0.71) {
+                        segId = "2";
+                    } else {
+                        segId = "1";
+                    }
+                }
+
+                for (let s = 0; s < splits.length; s++) {
+                    const sp = splits[s];
+                    if (String(segId) === String(sp.targetId)) {
+                        const cross = (sp.x2 - sp.x1) * (coords[1] - sp.y1) - (sp.y2 - sp.y1) * (coords[0] - sp.x1);
+                        if (cross > 0) {
+                            segId = String(sp.newId);
+                        }
+                    }
+                }
+
+                for (let jIdx = 0; jIdx < joins.length; jIdx++) {
+                    const [segA, segB] = joins[jIdx];
+                    if (String(segId) === String(segB)) {
+                        segId = String(segA);
+                    }
+                }
+
+                if (!segments[segId]) {
+                    segments[segId] = [];
+                }
+                segments[segId].push(coords);
+            }
+
+            floorPixels.length = 0;
+        }
+
         if (floorPixels.length > 0) {
             layers.push(
                 new mapEntities.MapLayer({
@@ -611,8 +709,16 @@ class DreameMapParser {
                 source: mapType
             };
 
+            if (wasAutoSegmented) {
+                metaData.autoSegmented = true;
+            }
+
             if (segmentNames[segmentId]) {
                 metaData.name = segmentNames[segmentId];
+            }
+
+            if (customFloorCfg?.names?.[segmentId]) {
+                metaData.name = customFloorCfg.names[segmentId];
             }
 
             if (segmentMaterials[segmentId]) {

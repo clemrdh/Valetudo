@@ -1,3 +1,4 @@
+const DreameMapParser = require("../DreameMapParser");
 const entities = require("../../../entities");
 const MapSegmentationCapability = require("../../../core/capabilities/MapSegmentationCapability");
 
@@ -60,6 +61,59 @@ class DreameMapSegmentationCapability extends MapSegmentationCapability {
         let fanSpeed = FanSpeedStateAttribute?.metaData?.rawValue ?? 1;
         let waterGrade = WaterGradeAttribute?.metaData?.rawValue ?? 1;
 
+        const mapLayers = this.robot?.state?.map?.layers ?? [];
+        const pixelSize = this.robot?.state?.map?.pixelSize ?? 5;
+        const isAutoSegmented = mapLayers.some(l => {
+            return l.type === "segment" && l.metaData?.autoSegmented === true;
+        });
+
+        if (isAutoSegmented) {
+            const zones = [];
+            const iterations = typeof options?.iterations === "number" ? options.iterations : 1;
+
+            segments.forEach(seg => {
+                const layer = mapLayers.find(l => {
+                    return l.type === "segment" && String(l.metaData?.segmentId) === String(seg.id);
+                });
+
+                if (layer && layer.dimensions) {
+                    const xMin = layer.dimensions.x.min * pixelSize;
+                    const xMax = (layer.dimensions.x.max + 1) * pixelSize;
+                    const yMin = layer.dimensions.y.min * pixelSize;
+                    const yMax = (layer.dimensions.y.max + 1) * pixelSize;
+                    const pA = DreameMapParser.CONVERT_TO_DREAME_COORDINATES(xMin, yMin);
+                    const pC = DreameMapParser.CONVERT_TO_DREAME_COORDINATES(xMax, yMax);
+
+                    zones.push([
+                        Math.min(pA.x, pC.x),
+                        Math.min(pA.y, pC.y),
+                        Math.max(pA.x, pC.x),
+                        Math.max(pA.y, pC.y),
+                        iterations,
+                        fanSpeed,
+                        waterGrade
+                    ]);
+                }
+            });
+
+            if (zones.length > 0) {
+                await this.robot.miotHelper.executeAction(
+                    this.miot_actions.start.siid,
+                    this.miot_actions.start.aiid,
+                    [
+                        {
+                            piid: this.miot_properties.mode.piid,
+                            value: 19
+                        },
+                        {
+                            piid: this.miot_properties.additionalCleanupParameters.piid,
+                            value: JSON.stringify({"areas": zones})
+                        }
+                    ]
+                );
+                return;
+            }
+        }
 
         const mappedSegments = segments.map((segment, i) => {
             return [

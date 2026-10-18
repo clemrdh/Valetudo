@@ -1,5 +1,9 @@
+const fs = require("fs");
 const MapSegmentRenameCapability = require("../../../core/capabilities/MapSegmentRenameCapability");
 const RobotFirmwareError = require("../../../core/RobotFirmwareError");
+
+const CUSTOM_SEGMENTS_FILE = "/data/maps_backup/custom_segments.json";
+const CURRENT_FLOOR_FILE = "/data/maps_backup/current_floor.txt";
 
 /**
  * @extends MapSegmentRenameCapability<import("../DreameValetudoRobot")>
@@ -35,6 +39,43 @@ class DreameMapSegmentRenameCapability extends MapSegmentRenameCapability {
      * @returns {Promise<void>}
      */
     async renameSegment(segment, name) {
+        try {
+            const activeFloor = fs.existsSync(CURRENT_FLOOR_FILE) ?
+                fs.readFileSync(CURRENT_FLOOR_FILE, "utf8").trim() :
+                "default";
+            let all = {};
+            if (fs.existsSync(CUSTOM_SEGMENTS_FILE)) {
+                all = JSON.parse(fs.readFileSync(CUSTOM_SEGMENTS_FILE, "utf8"));
+            }
+            if (!all[activeFloor]) {
+                all[activeFloor] = {splits: [], joins: [], names: {}};
+            }
+            if (!all[activeFloor].names) {
+                all[activeFloor].names = {};
+            }
+            all[activeFloor].names[String(segment.id)] = name;
+            fs.writeFileSync(CUSTOM_SEGMENTS_FILE, JSON.stringify(all, null, 2), "utf8");
+        } catch (e) {
+            // ignore
+        }
+
+        const mapLayers = this.robot?.state?.map?.layers ?? [];
+        const isAutoSegmented = mapLayers.some(l => {
+            return l.type === "segment" && l.metaData?.autoSegmented === true;
+        });
+
+        if (isAutoSegmented) {
+            mapLayers.forEach(l => {
+                if (l.type === "segment" && String(l.metaData?.segmentId) === String(segment.id)) {
+                    l.metaData.name = name;
+                }
+            });
+            if (typeof this.robot.emitMapUpdated === "function") {
+                this.robot.emitMapUpdated();
+            }
+            return;
+        }
+
         const res = await this.robot.sendCommand("action",
             {
                 did: this.robot.deviceId,

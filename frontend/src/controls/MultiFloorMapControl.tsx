@@ -78,14 +78,19 @@ export const useMultiFloorMapActionMutation = () => {
         },
         onSuccess: (data, variables) => {
             queryClient.setQueryData(["multi_floor_maps"], data);
-            queryClient.invalidateQueries({queryKey: ["map"]}).catch(() => {
-                /* intentional */
-            });
-            setTimeout(() => {
+            const refreshMapQueries = () => {
                 queryClient.invalidateQueries({queryKey: ["map"]}).catch(() => {
                     /* intentional */
                 });
-            }, 4000);
+                queryClient.invalidateQueries({queryKey: ["segments"]}).catch(() => {
+                    /* intentional */
+                });
+            };
+
+            refreshMapQueries();
+            for (const delay of [1500, 6000, 12000, 20000]) {
+                setTimeout(refreshMapQueries, delay);
+            }
 
             switch (variables.action) {
                 case "select":
