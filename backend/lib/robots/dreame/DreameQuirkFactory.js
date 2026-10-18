@@ -1,5 +1,9 @@
+const child_process = require("child_process");
+const fs = require("fs");
+
 const DreameMiotServices = require("./DreameMiotServices");
 const DreameUtils = require("./DreameUtils");
+const Logger = require("../../Logger");
 const Quirk = require("../../core/Quirk");
 const stateAttrs = require("../../entities/state/attributes");
 
@@ -799,6 +803,89 @@ class DreameQuirkFactory {
                         );
                     }
                 });
+            case DreameQuirkFactory.KNOWN_QUIRKS.MULTI_FLOOR_ACTIVE_MAP:
+                return new Quirk({
+                    id: id,
+                    title: "Multi-Étage : Carte active (Charger)",
+                    description: "Charge la carte d'un étage sauvegardé ou initialise une nouvelle carte vierge pour cartographier un autre étage (sauvegarde automatiquement la carte actuelle avant tout changement). Le robot doit être à l'arrêt.",
+                    options: ["etage_1", "rdc", "etage_2", "nouvelle_carte_vierge"],
+                    getter: async () => {
+                        try {
+                            const current = fs.readFileSync("/data/maps_backup/current_floor.txt", "utf8").trim();
+
+                            if (["etage_1", "rdc", "etage_2", "nouvelle_carte_vierge"].includes(current)) {
+                                return current;
+                            }
+                        } catch (e) {
+                            // Ignore missing file on first run
+                        }
+
+                        return "etage_1";
+                    },
+                    setter: async (value) => {
+                        const statusState = this.robot.state.getFirstMatchingAttribute({
+                            attributeClass: stateAttrs.StatusStateAttribute.name
+                        });
+
+                        if (statusState?.isActiveState) {
+                            throw new Error("Impossible de changer de carte pendant que le robot est en mouvement ou nettoie.");
+                        }
+
+                        if (!["etage_1", "rdc", "etage_2", "nouvelle_carte_vierge"].includes(value)) {
+                            throw new Error(`Received invalid value ${value}`);
+                        }
+
+                        await new Promise((resolve, reject) => {
+                            child_process.execFile("/data/map_manager.sh", ["load", value], {timeout: 20000}, (err, stdout, stderr) => {
+                                if (err) {
+                                    Logger.error("Multi-floor load failed", {err: err, stdout: stdout, stderr: stderr});
+                                    reject(new Error(`Échec du changement de carte: ${stderr || err.message}`));
+                                } else {
+                                    Logger.info(`Multi-floor map switched to ${value}`, stdout.trim());
+                                    resolve(stdout);
+                                }
+                            });
+                        });
+                    }
+                });
+            case DreameQuirkFactory.KNOWN_QUIRKS.MULTI_FLOOR_SAVE_MAP:
+                return new Quirk({
+                    id: id,
+                    title: "Multi-Étage : Sauvegarder la carte actuelle",
+                    description: "Sauvegarde immédiatement la carte actuelle du robot dans l'emplacement de l'étage choisi (Étage 1, RDC ou Étage 2).",
+                    options: ["select_to_trigger", "save_etage_1", "save_rdc", "save_etage_2"],
+                    getter: async () => {
+                        return "select_to_trigger";
+                    },
+                    setter: async (value) => {
+                        if (value === "select_to_trigger") {
+                            return;
+                        }
+
+                        const mapTargets = {
+                            "save_etage_1": "etage_1",
+                            "save_rdc": "rdc",
+                            "save_etage_2": "etage_2"
+                        };
+                        const target = mapTargets[value];
+
+                        if (!target) {
+                            throw new Error(`Received invalid value ${value}`);
+                        }
+
+                        await new Promise((resolve, reject) => {
+                            child_process.execFile("/data/map_manager.sh", ["save", target], {timeout: 15000}, (err, stdout, stderr) => {
+                                if (err) {
+                                    Logger.error("Multi-floor save failed", {err: err, stdout: stdout, stderr: stderr});
+                                    reject(new Error(`Échec de la sauvegarde de carte: ${stderr || err.message}`));
+                                } else {
+                                    Logger.info(`Multi-floor map saved to ${target}`, stdout.trim());
+                                    resolve(stdout);
+                                }
+                            });
+                        });
+                    }
+                });
             default:
                 throw new Error(`There's no quirk with id ${id}`);
         }
@@ -823,7 +910,9 @@ DreameQuirkFactory.KNOWN_QUIRKS = {
     WATER_HOOKUP_TEST_TRIGGER: "86094736-d66e-40c3-807c-3f5ef33cbf09",
     SIDE_BRUSH_ON_CARPET: "d23d7e7e-ef74-42a6-8a0a-4163742e437b",
     CARPET_FIRST: "3d6cd658-c72a-48d9-ba54-38cf2d26e2f6",
-    FAN_SPEED_ONE_TIME_TURBO: "017c40b7-dc24-48e8-a6e0-19d66528fa6d"
+    FAN_SPEED_ONE_TIME_TURBO: "017c40b7-dc24-48e8-a6e0-19d66528fa6d",
+    MULTI_FLOOR_ACTIVE_MAP: "c1e40001-0001-4000-8000-000000000001",
+    MULTI_FLOOR_SAVE_MAP: "c1e40002-0002-4000-8000-000000000002"
 };
 
 module.exports = DreameQuirkFactory;

@@ -256,6 +256,8 @@ class DreameX40UltraValetudoRobot extends DreameGen4ValetudoRobot {
         this.registerCapability(new QuirksCapability({
             robot: this,
             quirks: [
+                quirkFactory.getQuirk(DreameQuirkFactory.KNOWN_QUIRKS.MULTI_FLOOR_ACTIVE_MAP),
+                quirkFactory.getQuirk(DreameQuirkFactory.KNOWN_QUIRKS.MULTI_FLOOR_SAVE_MAP),
                 quirkFactory.getQuirk(DreameQuirkFactory.KNOWN_QUIRKS.CARPET_MODE_SENSITIVITY),
                 quirkFactory.getQuirk(DreameQuirkFactory.KNOWN_QUIRKS.MOP_DOCK_MOP_CLEANING_FREQUENCY),
                 quirkFactory.getQuirk(DreameQuirkFactory.KNOWN_QUIRKS.MOP_DOCK_DETERGENT),
