@@ -10,6 +10,7 @@ import RobotStatus from "./RobotStatus";
 import Dock from "./Dock";
 import CurrentStatistics from "./CurrentStatistics";
 import Attachments from "./Attachments";
+import DreameQuickSettings from "./DreameQuickSettings";
 import MultiFloorMapControl from "./MultiFloorMapControl";
 import {FanSpeedMediumIcon, WaterGradeLowIcon} from "../components/CustomIcons";
 import React from "react";
@@ -85,6 +86,8 @@ const ControlsBody = (): React.ReactElement => {
 
                 <Dock/>
             }
+
+            <DreameQuickSettings />
 
             {
                 robotInformation &&

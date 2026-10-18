@@ -221,7 +221,7 @@ class RobotRouter {
                         meta.activeMapId = id;
                         this.writeMapsMeta(meta);
                         setTimeout(() => {
-                            this.robot.pollMap().catch(() => {});
+                            this.robot.pollMap();
                         }, 3500);
                         res.json(this.readMapsMeta());
                         break;
@@ -243,7 +243,9 @@ class RobotRouter {
                             meta.maps.push({
                                 id: targetId,
                                 name: name || `Carte ${meta.maps.length + 1}`,
-                                updatedAt: new Date().toISOString()
+                                updatedAt: new Date().toISOString(),
+                                exists: true,
+                                size: 0
                             });
                         }
                         meta.activeMapId = targetId;
@@ -303,13 +305,15 @@ class RobotRouter {
                         meta.maps.push({
                             id: newId,
                             name: newName,
-                            updatedAt: new Date().toISOString()
+                            updatedAt: new Date().toISOString(),
+                            exists: false,
+                            size: 0
                         });
                         meta.activeMapId = newId;
                         this.writeMapsMeta(meta);
 
                         setTimeout(() => {
-                            this.robot.pollMap().catch(() => {});
+                            this.robot.pollMap();
                         }, 3500);
 
                         if (action === "mapping_pass") {
@@ -344,7 +348,7 @@ class RobotRouter {
                         await this.execMapManager(["load", "nouvelle_carte_vierge"]);
                         this.writeMapsMeta(meta);
                         setTimeout(() => {
-                            this.robot.pollMap().catch(() => {});
+                            this.robot.pollMap();
                         }, 3500);
                         res.json(this.readMapsMeta());
                         break;
