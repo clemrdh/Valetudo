@@ -33,6 +33,8 @@ import {
     useCleanRouteControlPropertiesQuery,
     useCleanRouteMutation,
     useCleanRouteQuery,
+    useCollisionAvoidantNavigationControlMutation,
+    useCollisionAvoidantNavigationControlQuery,
     useMopDockMopDryingTimeControlPropertiesQuery,
     useMopDockMopDryingTimeMutation,
     useMopDockMopDryingTimeQuery,
@@ -45,9 +47,13 @@ import {
     useMopExtensionFurnitureLegHandlingControlQuery,
     useMopTwistControlMutation,
     useMopTwistControlQuery,
+    useQuirksQuery,
+    useSetQuirkValueMutation,
 } from "../api";
 import {useCapabilitiesSupported} from "../CapabilitiesProvider";
 import ControlsCard from "./ControlsCard";
+
+const SIDE_BRUSH_EXTEND_QUIRK_ID = "e560d60c-76de-4ccc-8c01-8ccbcece850e";
 
 const ROUTE_LABELS: Record<string, string> = {
     quick: "Rapide",
@@ -91,6 +97,8 @@ const DreameQuickSettings = (): React.ReactElement | null => {
         mopExtensionSupported,
         mopTwistSupported,
         legHandlingSupported,
+        collisionAvoidantSupported,
+        quirksSupported,
         cameraLightSupported,
         annotationsSupported,
         duststreamingSupported
@@ -103,6 +111,8 @@ const DreameQuickSettings = (): React.ReactElement | null => {
         Capability.MopExtensionControl,
         Capability.MopTwistControl,
         Capability.MopExtensionFurnitureLegHandlingControl,
+        Capability.CollisionAvoidantNavigation,
+        Capability.Quirks,
         Capability.CameraLightControl,
         Capability.MapAnnotations,
         Capability.Duststreaming
@@ -140,6 +150,15 @@ const DreameQuickSettings = (): React.ReactElement | null => {
     const {data: legHandling} = useMopExtensionFurnitureLegHandlingControlQuery();
     const {mutate: setLegHandling, isPending: legHandlingPending} = useMopExtensionFurnitureLegHandlingControlMutation();
 
+    const {data: collisionAvoidant} = useCollisionAvoidantNavigationControlQuery();
+    const {mutate: setCollisionAvoidant, isPending: collisionAvoidantPending} = useCollisionAvoidantNavigationControlMutation();
+
+    const {data: quirks} = useQuirksQuery();
+    const {mutate: setQuirkValue, isPending: quirkPending} = useSetQuirkValueMutation();
+    const sideBrushQuirk = React.useMemo(() => {
+        return quirks?.find(q => q.id === SIDE_BRUSH_EXTEND_QUIRK_ID);
+    }, [quirks]);
+
     const {data: cameraLight} = useCameraLightControlQuery();
     const {mutate: setCameraLight, isPending: cameraLightPending} = useCameraLightControlMutation();
 
@@ -152,6 +171,8 @@ const DreameQuickSettings = (): React.ReactElement | null => {
         mopExtensionPending ||
         mopTwistPending ||
         legHandlingPending ||
+        collisionAvoidantPending ||
+        quirkPending ||
         cameraLightPending;
 
     return (
@@ -164,7 +185,7 @@ const DreameQuickSettings = (): React.ReactElement | null => {
                 {cleanRouteSupported && cleanRouteProps?.supportedRoutes && (
                     <Box sx={{mb: 1.25}}>
                         <Typography variant="caption" color="textSecondary" sx={{display: "block", mb: 0.5}}>
-                            Trajectoire (Clean Route)
+                            Trajectoire (Intensif/Profond = mode Laver)
                         </Typography>
                         <ToggleButtonGroup
                             size="small"
@@ -282,7 +303,7 @@ const DreameQuickSettings = (): React.ReactElement | null => {
                                         }}
                                     />
                                 }
-                                label={<Typography variant="caption">MopExtend™</Typography>}
+                                label={<Typography variant="caption">MopExtend™ (plinthes)</Typography>}
                             />
                         </Grid2>
                     )}
@@ -298,7 +319,43 @@ const DreameQuickSettings = (): React.ReactElement | null => {
                                         }}
                                     />
                                 }
-                                label={<Typography variant="caption">Twist sous meubles</Typography>}
+                                label={<Typography variant="caption">Twist sous plinthes</Typography>}
+                            />
+                        </Grid2>
+                    )}
+                    {quirksSupported && sideBrushQuirk && (
+                        <Grid2 size={6}>
+                            <FormControlLabel
+                                control={
+                                    <Switch
+                                        size="small"
+                                        checked={sideBrushQuirk.value === "on"}
+                                        onChange={(e) => {
+                                            setQuirkValue({
+                                                id: SIDE_BRUSH_EXTEND_QUIRK_ID,
+                                                value: e.target.checked ? "on" : "off"
+                                            });
+                                        }}
+                                    />
+                                }
+                                label={<Typography variant="caption">Brosse avant (coins)</Typography>}
+                            />
+                        </Grid2>
+                    )}
+                    {collisionAvoidantSupported && (
+                        <Grid2 size={6}>
+                            <FormControlLabel
+                                control={
+                                    <Switch
+                                        size="small"
+                                        checked={collisionAvoidant ? !collisionAvoidant.enabled : true}
+                                        onChange={(e) => {
+                                            // Ras des plinthes ON => LessColl = 0 (disable collision buffer)
+                                            setCollisionAvoidant(!e.target.checked);
+                                        }}
+                                    />
+                                }
+                                label={<Typography variant="caption">Ras des plinthes</Typography>}
                             />
                         </Grid2>
                     )}

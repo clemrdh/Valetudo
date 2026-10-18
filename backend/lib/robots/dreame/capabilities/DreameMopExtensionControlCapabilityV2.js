@@ -40,6 +40,20 @@ class DreameMopExtensionControlCapabilityV2 extends MopExtensionControlCapabilit
                 MopExtrSwitch: 1
             })
         );
+        await this.robot.miotHelper.writeProperty(
+            this.siid,
+            this.piid,
+            DreameUtils.SERIALIZE_MISC_TUNABLES_SINGLE_TUNABLE({
+                MopFullyScalable: 1
+            })
+        );
+        await this.robot.miotHelper.writeProperty(
+            this.siid,
+            this.piid,
+            DreameUtils.SERIALIZE_MISC_TUNABLES_SINGLE_TUNABLE({
+                ExtrFreq: 2
+            })
+        );
     }
 
     /**

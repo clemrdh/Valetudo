@@ -26,7 +26,7 @@ class DreameMopTwistControlCapabilityV2 extends MopTwistControlCapability {
         const res = await this.robot.miotHelper.readProperty(this.siid, this.piid);
         const deserializedResponse = DreameUtils.DESERIALIZE_MISC_TUNABLES(res);
 
-        return deserializedResponse.LacuneMopScalable === 1;
+        return deserializedResponse.LacuneMopScalable === 1 && deserializedResponse.MeticulousTwist === 1;
     }
 
     /**
@@ -40,6 +40,20 @@ class DreameMopTwistControlCapabilityV2 extends MopTwistControlCapability {
                 LacuneMopScalable: 1
             })
         );
+        await this.robot.miotHelper.writeProperty(
+            this.siid,
+            this.piid,
+            DreameUtils.SERIALIZE_MISC_TUNABLES_SINGLE_TUNABLE({
+                MeticulousTwist: 1
+            })
+        );
+        await this.robot.miotHelper.writeProperty(
+            this.siid,
+            this.piid,
+            DreameUtils.SERIALIZE_MISC_TUNABLES_SINGLE_TUNABLE({
+                ExtrFreq: 2
+            })
+        );
     }
 
     /**
@@ -51,6 +65,13 @@ class DreameMopTwistControlCapabilityV2 extends MopTwistControlCapability {
             this.piid,
             DreameUtils.SERIALIZE_MISC_TUNABLES_SINGLE_TUNABLE({
                 LacuneMopScalable: 0
+            })
+        );
+        await this.robot.miotHelper.writeProperty(
+            this.siid,
+            this.piid,
+            DreameUtils.SERIALIZE_MISC_TUNABLES_SINGLE_TUNABLE({
+                MeticulousTwist: -1
             })
         );
     }

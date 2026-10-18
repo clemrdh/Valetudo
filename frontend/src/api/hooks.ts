@@ -1800,10 +1800,16 @@ export const useCleanRouteQuery = () => {
 };
 
 export const useCleanRouteMutation = () => {
+    const queryClient = useQueryClient();
+
     return useValetudoFetchingMutation({
         queryKey: [QueryKey.CleanRouteControl],
         mutationFn: (route: CleanRoute) => {
-            return sendCleanRoute({route: route}).then(fetchCleanRoute);
+            return sendCleanRoute({route: route}).then(fetchCleanRoute).then((res) => {
+                queryClient.invalidateQueries({queryKey: [QueryKey.Attributes]}).catch(() => {});
+
+                return res;
+            });
         },
         onError: useOnCommandError(Capability.CleanRouteControl)
     });

@@ -587,9 +587,14 @@ class DreameQuirkFactory {
                         return this.robot.miotHelper.writeProperty(
                             DreameMiotServices["GEN2"].VACUUM_2.SIID,
                             DreameMiotServices["GEN2"].VACUUM_2.PROPERTIES.MISC_TUNABLES.PIID,
-                            DreameUtils.SERIALIZE_MISC_TUNABLES_SINGLE_TUNABLE({
-                                SbrushExtrSwitch: val
-                            })
+                            val === 1 ?
+                                DreameUtils.SERIALIZE_MISC_TUNABLES([
+                                    {k: "SbrushExtrSwitch", v: 1},
+                                    {k: "ExtrFreq", v: 2}
+                                ]) :
+                                DreameUtils.SERIALIZE_MISC_TUNABLES_SINGLE_TUNABLE({
+                                    SbrushExtrSwitch: val
+                                })
                         );
                     }
                 });
