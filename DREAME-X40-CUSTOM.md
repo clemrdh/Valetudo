@@ -15,10 +15,14 @@ Ce dépôt (`clemrdh/Valetudo`, branche `dreame-multifloor`) étend Valetudo `20
   - `delete` : supprime une carte sauvegardée.
   - `new` (`nouvelle_carte_vierge`) : initialise une carte vierge pour cartographier un nouvel étage.
   - **Mapping Pass & Map Reset** accessibles directement depuis le panneau Home.
-- **Auto-segmentation & Persistance des noms de pièces (`DreameMapParser.js`, `DreameMapSegmentEditCapability.js`, `DreameMapSegmentRenameCapability.js`) :**
-  - Si un étage secondaire a été cartographié sans la base et que `ava` n'a pas découpé les pièces, `DreameMapParser.js` segmente automatiquement la carte par composantes connexes (`autoSegmented: true`) et supporte la fusion/division locale (`/data/maps_backup/custom_segments_<floor>.json`).
-  - Lors d'un nettoyage sur une carte auto-segmentée, `DreameMapSegmentationCapability.js` convertit automatiquement les pièces sélectionnées en nettoyage par zones englobantes (`mode = 19`, `areas`).
-  - Les noms des pièces sont persistés par étage dans `/data/maps_backup/room_names.json` et ré-appliqués à chaque parsing de carte.
+- **Auto-segmentation & Persistance des noms de pièces (`DreameMapParser.js`, `DreameCustomSegments.js`, `DreameMapSegmentEditCapability.js`, `DreameMapSegmentRenameCapability.js`) :**
+  - Si un étage a été cartographié sans la base et que `ava` n'a pas découpé les pièces (pas de `/data/DivideMap/1/segmented_map_large.png`), `DreameMapParser.js` découpe la carte en cinq bandes calculées sur le rectangle englobant de l'étage (`autoSegmented: true`, pièces `1` à `5`).
+  - Les fusions et divisions faites dans l'interface sont stockées par étage dans `/data/maps_backup/custom_segments.json` (`{"<étage>": {"operations": [...], "names": {...}}}`). `DreameCustomSegments.js` les rejoue dans l'ordre à chaque parsing. Les anciennes listes `splits` / `joins` (avant le 2026-10-25) sont converties à la lecture, divisions d'abord.
+  - Une division ne coupe qu'entre les murs atteints par le trait, prolongé de 2 px. Elle est refusée si le trait ne ferme pas la pièce ou laisse une pièce de moins de 1 m². Le nouvel identifiant va à la plus petite partie.
+  - Après chaque opération, chaque pièce ne garde que son plus grand morceau d'un seul tenant. Les autres morceaux et les pièces de moins de 1 m² rejoignent la pièce qui a le plus de pixels autour d'eux, jusqu'à 3 px à travers les murs.
+  - Une fusion donne le nom de la pièce absorbée à la pièce cible si celle-ci n'en a pas.
+  - Lors d'un nettoyage sur une carte auto-segmentée, `DreameMapSegmentationCapability.js` convertit les pièces sélectionnées en zones (`mode = 19`, `areas`). Chaque zone est le rectangle englobant de la pièce, qui peut déborder sur ses voisines.
+  - Les noms des pièces sont persistés par étage dans `custom_segments.json` (`names`) et ré-appliqués à chaque parsing de carte.
 
 ### 1.2. Sélecteur de pièces sur la Home & 5 Modes de nettoyage (`RoomCleaningControl.tsx`)
 - **Sélection directe des pièces depuis la Home** (chips cliquables + *Tout* / *Aucun*, synchronisés avec les segments cliqués sur la carte).
