@@ -48,7 +48,7 @@ class DreameMapSegmentRenameCapability extends MapSegmentRenameCapability {
                 all = JSON.parse(fs.readFileSync(CUSTOM_SEGMENTS_FILE, "utf8"));
             }
             if (!all[activeFloor]) {
-                all[activeFloor] = {splits: [], joins: [], names: {}};
+                all[activeFloor] = {operations: [], names: {}};
             }
             if (!all[activeFloor].names) {
                 all[activeFloor].names = {};

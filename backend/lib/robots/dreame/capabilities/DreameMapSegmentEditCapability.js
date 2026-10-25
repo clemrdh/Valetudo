@@ -1,5 +1,7 @@
+const DreameCustomSegments = require("../DreameCustomSegments");
 const DreameMapParser = require("../DreameMapParser");
 const fs = require("fs");
+const mapEntities = require("../../../entities/map");
 const MapSegmentEditCapability = require("../../../core/capabilities/MapSegmentEditCapability");
 const RobotFirmwareError = require("../../../core/RobotFirmwareError");
 
@@ -50,7 +52,7 @@ class DreameMapSegmentEditCapability extends MapSegmentEditCapability {
             all = {};
         }
         if (!all[activeFloor]) {
-            all[activeFloor] = {splits: [], joins: [], names: {}};
+            all[activeFloor] = {operations: [], names: {}};
         }
         return {activeFloor, all, cfg: all[activeFloor]};
     }
@@ -84,8 +86,17 @@ class DreameMapSegmentEditCapability extends MapSegmentEditCapability {
 
         if (isAutoSegmented) {
             const {all, cfg} = this.readCustomSegments();
-            cfg.joins = Array.isArray(cfg.joins) ? cfg.joins : [];
-            cfg.joins.push([String(segmentA.id), String(segmentB.id)]);
+            DreameCustomSegments.APPEND_OPERATION(cfg, {
+                type: "join",
+                targetId: String(segmentA.id),
+                sourceId: String(segmentB.id)
+            });
+
+            // Names are stored by id, so the merged room would lose the name of B otherwise
+            cfg.names = cfg.names ?? {};
+            if (!cfg.names[String(segmentA.id)] && cfg.names[String(segmentB.id)]) {
+                cfg.names[String(segmentA.id)] = cfg.names[String(segmentB.id)];
+            }
             fs.writeFileSync(CUSTOM_SEGMENTS_FILE, JSON.stringify(all, null, 2), "utf8");
             await this.refreshFromDat2();
             return;
@@ -144,30 +155,42 @@ class DreameMapSegmentEditCapability extends MapSegmentEditCapability {
 
         if (isAutoSegmented) {
             const pixelSize = this.robot?.state?.map?.pixelSize ?? 5;
-            let maxId = 5;
-            mapLayers.forEach(l => {
-                const n = parseInt(l.metaData?.segmentId, 10);
-                if (!isNaN(n) && n > maxId) {
-                    maxId = n;
-                }
+            const layer = mapLayers.find(l => {
+                return l.type === "segment" && String(l.metaData?.segmentId) === String(segment.id);
             });
-            const {all, cfg} = this.readCustomSegments();
-            cfg.splits = Array.isArray(cfg.splits) ? cfg.splits : [];
-            cfg.splits.forEach(sp => {
-                const n = parseInt(sp.newId, 10);
-                if (!isNaN(n) && n > maxId) {
-                    maxId = n;
-                }
-            });
-            const newId = String(maxId + 1);
-            cfg.splits.push({
-                targetId: String(segment.id),
-                newId: newId,
+            const flatPixels = mapEntities.MapLayer.DECOMPRESS_PIXELS(layer?.compressedPixels);
+            const pixels = [];
+            for (let i = 0; i < flatPixels.length; i += 2) {
+                pixels.push([flatPixels[i], flatPixels[i + 1]]);
+            }
+
+            const plan = DreameCustomSegments.PLAN_SPLIT(pixels, {
                 x1: pA.x / pixelSize,
                 y1: pA.y / pixelSize,
                 x2: pB.x / pixelSize,
                 y2: pB.y / pixelSize
             });
+
+            switch (plan.result) {
+                case "not_closed":
+                    throw new RobotFirmwareError("Failed to split segment. Both ends of the cutting line need to be connected with a wall surrounding the chosen segment, and the two parts must not touch anywhere else.");
+                case "too_small":
+                    throw new RobotFirmwareError("Failed to split segment. At least one of the resulting segments is too small.");
+            }
+
+            const {all, cfg} = this.readCustomSegments();
+            const operations = DreameCustomSegments.GET_OPERATIONS(cfg);
+            const newId = DreameCustomSegments.NEXT_SEGMENT_ID(
+                mapLayers.map(l => {
+                    return l.metaData?.segmentId;
+                }),
+                operations
+            );
+            DreameCustomSegments.APPEND_OPERATION(cfg, Object.assign({
+                type: "split",
+                targetId: String(segment.id),
+                newId: newId
+            }, plan.line));
             fs.writeFileSync(CUSTOM_SEGMENTS_FILE, JSON.stringify(all, null, 2), "utf8");
             await this.refreshFromDat2();
             return;

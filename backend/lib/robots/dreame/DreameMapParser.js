@@ -1,4 +1,5 @@
 const DreameConst = require("./DreameConst");
+const DreameCustomSegments = require("./DreameCustomSegments");
 const fs = require("fs");
 const Logger = require("../../Logger");
 const mapEntities = require("../../entities/map");
@@ -224,7 +225,7 @@ class DreameMapParser {
                     allCustom = JSON.parse(fs.readFileSync("/data/maps_backup/custom_segments.json", "utf8"));
                 }
                 if (!allCustom[activeFloor]) {
-                    allCustom[activeFloor] = {splits: [], joins: [], names: {}};
+                    allCustom[activeFloor] = {operations: [], names: {}};
                 }
                 if (!allCustom[activeFloor].names) {
                     allCustom[activeFloor].names = {};
@@ -668,8 +669,7 @@ class DreameMapParser {
 
             const spanX = Math.max(1, maxX - minX);
             const spanY = Math.max(1, maxY - minY);
-            const splits = Array.isArray(customFloorCfg?.splits) ? customFloorCfg.splits : [];
-            const joins = Array.isArray(customFloorCfg?.joins) ? customFloorCfg.joins : [];
+            const segmentIds = new Array(floorPixels.length);
 
             for (let k = 0; k < floorPixels.length; k++) {
                 const coords = floorPixels[k];
@@ -691,27 +691,20 @@ class DreameMapParser {
                     }
                 }
 
-                for (let s = 0; s < splits.length; s++) {
-                    const sp = splits[s];
-                    if (String(segId) === String(sp.targetId)) {
-                        const cross = (sp.x2 - sp.x1) * (coords[1] - sp.y1) - (sp.y2 - sp.y1) * (coords[0] - sp.x1);
-                        if (cross > 0) {
-                            segId = String(sp.newId);
-                        }
-                    }
-                }
+                segmentIds[k] = segId;
+            }
 
-                for (let jIdx = 0; jIdx < joins.length; jIdx++) {
-                    const [segA, segB] = joins[jIdx];
-                    if (String(segId) === String(segB)) {
-                        segId = String(segA);
-                    }
-                }
+            DreameCustomSegments.APPLY_OPERATIONS(
+                floorPixels,
+                segmentIds,
+                DreameCustomSegments.GET_OPERATIONS(customFloorCfg)
+            );
 
-                if (!segments[segId]) {
-                    segments[segId] = [];
+            for (let k = 0; k < floorPixels.length; k++) {
+                if (!segments[segmentIds[k]]) {
+                    segments[segmentIds[k]] = [];
                 }
-                segments[segId].push(coords);
+                segments[segmentIds[k]].push(floorPixels[k]);
             }
 
             floorPixels.length = 0;
